@@ -5,7 +5,9 @@ from datetime import datetime, timedelta
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from config import EMAIL_SENDER, EMAIL_RECEIVER, SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD
+from email.utils import formataddr
+from config import NTFY_URL, EMAIL_SENDER, EMAIL_RECEIVER, SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD
+import requests
 
 def get_due_contacts():
     conn = sqlite3.connect('contacts.db')
@@ -98,8 +100,8 @@ def send_email(due_contacts):
     html_body += "</table></body></html>"
 
     msg = MIMEMultipart("alternative")
-    msg['Subject'] = '💬 Contact Reminder'
-    msg['From'] = EMAIL_SENDER
+    msg['Subject'] = '💬 Reach Out to Your Contacts '
+    msg['From'] = formataddr(("📇 Contact Reminder 📇", EMAIL_SENDER))
     msg['To'] = EMAIL_RECEIVER
 
     part1 = MIMEText(text_body, "plain")
@@ -122,9 +124,21 @@ def update_last_contacted(uids):
     conn.commit()
     conn.close()
 
+def send_ntfy_notification(due_contacts):
+    if not due_contacts:
+        return
+    names = ", ".join(name for _, name, *_ in due_contacts)
+    message = f"You should contact: {names}"
+    topic = NTFY_TOPIC if 'NTFY_TOPIC' in globals() else "contact-reminder"
+    try:
+        requests.post(NTFY_URL, data=message.encode("utf-8"))
+    except Exception as e:
+        print("Failed to send ntfy notification:", e)
+
 def main():
     due_contacts = get_due_contacts()
     send_email(due_contacts)
+    send_ntfy_notification(due_contacts)
     update_last_contacted([uid for uid, *_ in due_contacts])
 
 if __name__ == "__main__":
